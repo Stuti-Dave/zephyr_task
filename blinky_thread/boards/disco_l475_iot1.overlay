@@ -1,0 +1,20 @@
+/ {
+	aliases {
+		led2= &yel_led2;
+		led3= &red_led3;
+	};
+		
+	user_leds {
+		compatible="gpio-leds";
+		yel_led2: led_2 {
+			gpios = <&gpioc 9 GPIO_ACTIVE_HIGH>;
+			label = "User LED 2";
+			status="okay";
+		};
+		red_led3: led_3 {
+			gpios = <&gpioe 3 GPIO_ACTIVE_HIGH>;
+			label = "User LED 3";
+			status="okay";
+		};
+	};
+};

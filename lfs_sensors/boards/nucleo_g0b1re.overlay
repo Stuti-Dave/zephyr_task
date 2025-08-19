@@ -1,0 +1,103 @@
+
+/delete-node/ &boot_partition;
+/delete-node/ &slot0_partition;
+/delete-node/ &slot1_partition;
+/delete-node/ &storage_partition;
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x0 DT_SIZE_K(64)>;
+			read-only;
+		};
+
+		slot0_partition: partition@10000 {
+			label = "image-0";
+			reg = <0x10000 DT_SIZE_K(64)>;
+		};
+
+		slot1_partition: partition@20000 {
+			label = "image-1";
+			reg = <0x20000 DT_SIZE_K(64)>;
+		};
+
+		storage_partition: partition@30000 {
+			label = "storage";
+			reg = <0x30000 DT_SIZE_K(100)>;
+		};
+
+		lfs1_partition: partition@49000 {
+			label = "lfs1";
+			reg = <0x49000 DT_SIZE_K(100)>;
+		};
+
+		lfs2_partition: partition@62000 {
+			label = "lfs2";
+			reg = <0x62000 DT_SIZE_K(100)>;
+		};
+	};
+};
+
+/ {
+
+    aliases {
+        ht-sensor = &hts;
+        pressure-sensor = &lps22hh;
+        imu-sensor = &lsmdso;
+    };
+};
+
+
+
+arduino_i2c: &i2c1 {
+    hts: hts221@5f {
+        compatible = "st,hts221";
+        reg = <0x5f>;
+    };
+
+    lps22hh: lps22hh@5d {
+        compatible = "st,lps22hh";
+        reg = <0x5d>;
+        drdy-gpios = <&arduino_header 12 GPIO_ACTIVE_HIGH>; /* D6 */
+    };
+
+    lsmdso: lsm6dso@6b {
+        compatible = "st,lsm6dso";
+        reg = <0x6b>;
+        irq-gpios = <&arduino_header 11 GPIO_ACTIVE_HIGH>; /* D5 */
+        int-pin = <2>;
+    };
+};
+
+/ {
+	fstab {
+		compatible = "zephyr,fstab";
+		lfs1: lfs1 {
+			compatible = "zephyr,fstab,littlefs";
+			read-size = <256>;
+			prog-size = <256>;
+			cache-size = <4096>;
+			lookahead-size = <256>;
+			block-cycles = <512>;
+			partition = <&lfs1_partition>;
+			mount-point = "/lfs1";
+			automount;
+		};
+		lfs2: lfs2 {
+			compatible = "zephyr,fstab,littlefs";
+			read-size = <256>;
+			prog-size = <256>;
+			cache-size = <4096>;
+			lookahead-size = <256>;
+			block-cycles = <512>;
+			partition = <&lfs2_partition>;
+			mount-point = "/lfs2";
+			automount;
+		};
+	};
+};

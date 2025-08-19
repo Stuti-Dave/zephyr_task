@@ -1,0 +1,25 @@
+sample:
+  description: Hello World with blinky
+    application
+  name: hello blinky
+common:
+  min_ram: 2
+  min_flash: 16
+  tags: introduction
+  integration_platforms:
+    - native_sim
+  harness: console
+  harness_config:
+    type: one_line
+    regex:
+      - "Hello World! (.*)"
+tests:
+  tasks.helloblinky:
+    tags:
+      - led
+      - gpio
+    filter: dt_enabled_alias_with_parent_compat("led0", "gpio-leds")
+    depends_on: gpio
+    harness: led
+    integration_platforms:
+      - frdm_k64f

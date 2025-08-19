@@ -1,0 +1,29 @@
+/ {
+
+    aliases {
+        ht-sensor = &hts;
+        pressure-sensor = &lps22hh;
+        imu-sensor = &lsmdso;
+    };
+};
+
+&i2c0 {
+    status = "okay";
+    hts: hts221@5f {
+        compatible = "st,hts221";
+        reg = <0x5f>;
+    };
+
+    lps22hh: lps22hh@5d {
+        compatible = "st,lps22hh";
+        reg = <0x5d>;
+        drdy-gpios = <&gpio0 5 GPIO_ACTIVE_HIGH>;
+    };
+
+    lsmdso: lsm6dso@6b {
+        compatible = "st,lsm6dso";
+        reg = <0x6b>;
+        irq-gpios = <&gpio0 11 GPIO_ACTIVE_HIGH>;
+        int-pin = <2>;
+    };
+};
