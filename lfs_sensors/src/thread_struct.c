@@ -12,7 +12,34 @@
  */
 
 #include <zephyr/kernel.h>
-#include "thread_struct.h"
+#include <stdint.h>
+
+/* -------------------------------------------------------------------------- */
+/* Structure and shared buffer definitions for threads                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Structure for storing IMU sensor data (x, y, z).
+ */
+typedef struct {
+    double x;
+    double y;
+    double z;
+}imu_sensor_data;
+
+/**
+ * @brief Shared buffer for sensor readings.
+ *
+ * This structure stores humidity, temperature, pressure,
+ * accelerometer, and gyroscope values.
+ */
+struct shared_buf {
+    double hum;
+    double temp;
+    double pressure;
+    imu_sensor_data accel;
+    imu_sensor_data gyro;
+};
 
 /* -------------------------------------------------------------------------- */
 /* External Sensor Functions (Implemented in Sensor Drivers)                  */

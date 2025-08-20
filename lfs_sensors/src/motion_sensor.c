@@ -21,7 +21,6 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <errno.h>
-#include "thread_struct.h"
 
 //==============================================================================
 // Device Tree Definitions
@@ -44,7 +43,7 @@ LOG_MODULE_REGISTER(imu);
 // Private Function Prototypes
 //==============================================================================
 
-int imu_sensor_process(struct three_d *accel, struct three_d *gyro);
+int imu_sensor_process(imu_sensor_data *accel, imu_sensor_data *gyro);
 
 //==============================================================================
 // Private Function Implementation
