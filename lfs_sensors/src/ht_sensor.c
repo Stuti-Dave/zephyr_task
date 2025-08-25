@@ -15,9 +15,11 @@
 //==============================================================================
 
 #include <zephyr/device.h>
-#include <zephyr/drivers/sensor.h>
 #include <zephyr/kernel.h>
+#include "main.h"
+#include <zephyr/drivers/sensor.h>
 #include <zephyr/logging/log.h>
+#include <errno.h>
 #include <stdint.h>
 
 //==============================================================================
@@ -41,7 +43,8 @@ LOG_MODULE_REGISTER(hum_temp);
 // Private Function Prototypes
 //==============================================================================
 
-int hum_temp_process(double *temp, double *hum);
+int hum_temp_process(hum_temp_data* data_struct);
+void hum_temp_thread(void *, void *, void *);
 
 //==============================================================================
 // Private Function Implementation
@@ -59,33 +62,67 @@ int hum_temp_process(double *temp, double *hum);
  * @retval 0  Success, values stored in @p temp and @p hum.
  * @retval -1 Failure, check logs for details.
  */
-int hum_temp_process(double *temp, double *hum){
-	if (!device_is_ready(hts_dev)) {
-		LOG_ERR("sensor: %s device not ready.", hts_dev->name);
+
+#define MAX_MSGS	10
+#define MSGQ_ALIGN	32
+#define SENSOR_PRIORITY	5
+#define HT_THREAD_STACK_SIZE	512
+
+struct k_msgq ht_sensor_msgq;
+K_MSGQ_DEFINE(ht_sensor_msgq, sizeof(hum_temp_data), MAX_MSGS, MSGQ_ALIGN);
+
+int hum_temp_process(hum_temp_data* data_struct){
+	if (sensor_sample_fetch(hts_dev) < 0)
+	{
+		LOG_ERR("Faileed to fetch HT sample");
 		return -1;
 	}
-
-	if (sensor_sample_fetch(hts_dev) < 0) {
-		LOG_ERR("sensor: %s sample update error", hts_dev->name);
-		return -1;
-	}
-
-	struct sensor_value temperature, humidity;
-	if (sensor_channel_get(hts_dev, SENSOR_CHAN_AMBIENT_TEMP, &temperature) < 0) {
+	struct sensor_value temp, hum;
+	if (sensor_channel_get(hts_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp) < 0) {
 		LOG_ERR("sensor: %s read temperature channel failed", hts_dev->name);
 		return -1;
 	}
 	
-	if (sensor_channel_get(hts_dev, SENSOR_CHAN_HUMIDITY, &humidity) < 0) {
+	if (sensor_channel_get(hts_dev, SENSOR_CHAN_HUMIDITY, &hum) < 0) {
 		LOG_ERR("sensor: %s read humidity channel failed", hts_dev->name);
 		return -1;
 	}
 
 	/* store temperature reading*/
-	*temp = sensor_value_to_double(&temperature);
+	data_struct->temperature = sensor_value_to_double(&temp);
 
 	/* store humidity reading*/
-	*hum = sensor_value_to_double(&humidity);
+	data_struct->humidity = sensor_value_to_double(&hum);
+
+	return 0;
+}
+
+
+K_THREAD_DEFINE(hum_temp_tid, HT_THREAD_STACK_SIZE, hum_temp_thread, NULL, NULL, NULL, SENSOR_PRIORITY, 0, 0);
+//message queue
+
+void hum_temp_thread(void *, void *, void *)
+{
+	hum_temp_data data_struct;
+	LOG_INF("HT Thread started");
+
+	while (1) 
+	{
+		if (hum_temp_process(&data_struct) == 0){
+			k_msgq_put(&ht_sensor_msgq, &data_struct, K_MSEC(1000));
+		}
+		k_sleep(K_MSEC(1000));
+	}
+}
+
+
+int hts_init(void)
+{
+	if (!device_is_ready(hts_dev)) {
+		LOG_ERR("sensor: %s device not ready.", hts_dev->name);
+		return -1;
+	}
+	LOG_INF("HT sensor initialized");
 
 	return 0;
 }

@@ -1,0 +1,7 @@
+# directories
+**/build/
+
+# files
+*.o
+*.swp
+*.bin

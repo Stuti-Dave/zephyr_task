@@ -1,17 +1,18 @@
 /delete-node/ &boot_partition;
 /delete-node/ &slot0_partition;
 /delete-node/ &storage_partition;
+/delete-node/ &slot1_partition;
+/delete-node/ &slot2_partition;
 
 &flash0 {
 	partitions {
-		comaptible = "fixed partitons";
-		
+		compatible = "fixed-partitions";
 
-		boot_partition : partition@0 {
+		boot_partition: partition@0 {
 			label = "mcu-boot";
 			reg = <0x0 DT_SIZE_K(64)>;
 			read-only;
-		}
+		};
 		
 		slot0_partition: partition@10000 {
 			label = "image-0";
@@ -20,7 +21,7 @@
 
 		slot1_partition: partition@29000 {
 			label = "image-1";
-			reg = <0x29000 DT_SIZE_K(100)>
+			reg = <0x29000 DT_SIZE_K(100)>;
 		};
 
 		storage_partition: partition@42000 {
@@ -63,3 +64,4 @@
         irq-gpios = <&gpiod 11 GPIO_ACTIVE_HIGH>;
     };
 };
+
