@@ -34,25 +34,63 @@ extern struct k_msgq imu_sensor_msgq;
 
 #define SENSORS_BUF_SIZE		sizeof(sensors_shared_buf)
 #define SENSORS_THREADS_PRIORITY	5
-#define LOGGER_THREAD_STACK_SIZE	1024
+#define LOGGER_THREAD_STACK_SIZE	2*1024
+#define FILE_SIZE			1024
+#define MAX_FILES			10
 
-void logger_func(sensors_shared_buf *shared_buf)
+static int file_index = 0;
+static size_t current_file_size = 0;
+
+
+static void logger_func(sensors_shared_buf *shared_buf)
 {
 	struct fs_file_t file;
 	fs_file_t_init(&file);
-	
-	int ret = fs_open(&file, "/lfs/sensor.log",FS_O_CREATE | FS_O_WRITE | FS_O_APPEND);
+
+	char filename[32];
+	snprintf(filename, sizeof(filename), "/lfs/sensor%d.log", file_index);
+
+	int ret = fs_open(&file, filename, FS_O_CREATE | FS_O_WRITE | FS_O_APPEND);
 	if (ret < 0) {
-		LOG_ERR("Failed to open file: %d", ret);
+		LOG_ERR("Failed to open file %s: %d", filename, ret);
 		return;
 	}
-
-	ret = fs_write(&file, shared_buf, SENSORS_BUF_SIZE);
-	if (ret < 0) {
-		LOG_ERR("Failed to write file: %d", ret);
-	} else {
-		fs_write(&file, "\n", 1);
+    
+	struct fs_dirent entry;
+	ret = fs_stat(filename, &entry);
+	
+	if (ret == 0) {
+		current_file_size = entry.size;
+	}else {
+		current_file_size = 0;
 	}
+	
+	if (current_file_size >= FILE_SIZE) {
+		fs_close(&file);
+
+		file_index = (file_index + 1) % MAX_FILES;
+		snprintf(filename, sizeof(filename), "/lfs/sensor%d.log", file_index);
+		LOG_INF("new file: %s", filename);
+
+		fs_file_t_init(&file);
+		ret = fs_open(&file, filename, FS_O_CREATE | FS_O_WRITE);
+		
+		if (ret < 0) {
+			LOG_ERR("Failed to open new log file %s: %d", filename, ret);
+			return;
+		}
+		current_file_size = 0;
+	}
+	
+	ret = fs_write(&file, shared_buf, sizeof(sensors_shared_buf));
+	if (ret < 0) {
+		LOG_ERR("Failed to write file %s: %d", filename, ret);
+	} else{
+		current_file_size += ret;
+		fs_write(&file, "\n", 1);
+		current_file_size += 1;
+	}
+	LOG_INF("Snsor data: Hum %f", shared_buf->hts_data.humidity);
 	fs_close(&file);
 }
 
@@ -124,7 +162,7 @@ static int littlefs_mount(struct fs_mount_t *mp)
                        (uintptr_t)mp->storage_dev, mp->mnt_point, rc);
                 return rc;
         }
-        LOG_INF("%s mount: %d\n", mp->mnt_point, rc);
+        LOG_INF("%s is mounted: %d\n", mp->mnt_point, rc);
 	return 0;
 }
 
@@ -136,7 +174,7 @@ int logger_init(void)
 		    LOG_ERR("FAIL: mount id %" PRIuPTR " at %s: %d",(uintptr_t)lfs_mount_pt.storage_dev, lfs_mount_pt.mnt_point, rc);
 		    return rc;
 	    }
-	    LOG_INF("%s mount: %d", lfs_mount_pt.mnt_point, rc);
+	    LOG_INF("%s is mounted: %d", lfs_mount_pt.mnt_point, rc);
 
 	    /* Create all 4 threads */
 	    hts_init();

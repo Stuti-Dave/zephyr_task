@@ -94,6 +94,7 @@ int hum_temp_process(hum_temp_data* data_struct){
 	/* store humidity reading*/
 	data_struct->humidity = sensor_value_to_double(&hum);
 
+	//LOG_INF("Humidty; %f and TEmp: %f", data_struct->humidity, data_struct->temperature);
 	return 0;
 }
 
