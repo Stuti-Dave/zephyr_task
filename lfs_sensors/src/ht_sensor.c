@@ -94,7 +94,6 @@ int hum_temp_process(hum_temp_data* data_struct){
 	/* store humidity reading*/
 	data_struct->humidity = sensor_value_to_double(&hum);
 
-	//LOG_INF("Humidty; %f and TEmp: %f", data_struct->humidity, data_struct->temperature);
 	return 0;
 }
 
@@ -104,6 +103,11 @@ K_THREAD_DEFINE(hum_temp_tid, HT_THREAD_STACK_SIZE, hum_temp_thread, NULL, NULL,
 
 void hum_temp_thread(void *, void *, void *)
 {
+	if (!device_is_ready(hts_dev)) {
+                LOG_ERR("sensor: %s device not ready.", hts_dev->name);
+                return;
+        }
+
 	hum_temp_data data_struct;
 	LOG_INF("HT Thread started");
 
@@ -114,16 +118,5 @@ void hum_temp_thread(void *, void *, void *)
 		}
 		k_sleep(K_MSEC(1000));
 	}
-}
 
-
-int hts_init(void)
-{
-	if (!device_is_ready(hts_dev)) {
-		LOG_ERR("sensor: %s device not ready.", hts_dev->name);
-		return -1;
-	}
-	LOG_INF("HT sensor initialized");
-
-	return 0;
 }

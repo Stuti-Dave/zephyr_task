@@ -95,25 +95,19 @@ K_THREAD_DEFINE(pressure_tid, PRESSURE_THREAD_STACK_SIZE, pressure_thread, NULL,
 
 void pressure_thread(void *, void *, void *)
 {
+	if (!device_is_ready(pressure_dev)) {
+                LOG_ERR("sensor: %s device not ready.", pressure_dev->name);
+                return;
+        }
+
 	LOG_INF("Pressure Thread started");
 	press_data data_struct;
 
 	while (1) {
 		if(pressure_sensor_process(&data_struct) == 0) {
-			//LOG_INF("pressure: %f", sensors_shared_buf.pressure);
+			LOG_INF("pressure: %f", data_struct.pressure);
 			k_msgq_put(&lp_sensor_msgq, &data_struct, K_MSEC(1000));
 		}
 		k_sleep(K_MSEC(1000));
 	}
-}
-
-int lps_init(void)
-{
-	if (!device_is_ready(pressure_dev)) {
-                LOG_ERR("sensor: %s device not ready.", pressure_dev->name);
-                return -1;
-        }
-	LOG_INF("Pressure sensor initialized");
-	
-	return 0;
 }

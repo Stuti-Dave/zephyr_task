@@ -39,7 +39,18 @@ extern struct k_msgq imu_sensor_msgq;
 #define MAX_FILES			10
 
 static int file_index = 0;
-static size_t current_file_size = 0;
+
+static void print_sensor_data(sensors_shared_buf *sensor_buffer)
+{
+	LOG_INF("Sensor data:");
+	// print all sensor data
+	LOG_INF("Humidity: %.2f", sensor_buffer->hts_data.humidity);
+	LOG_INF("Temperature: %.2f", sensor_buffer->hts_data.temperature);
+	LOG_INF("Pressure: %.2f", sensor_buffer->lps_data.pressure);
+	LOG_INF("Accel: %.2f %.2f %.2f", sensor_buffer->imu_data.accel.x, sensor_buffer->imu_data.accel.y, sensor_buffer->imu_data.accel.z);
+	LOG_INF("Gyro: %.2f %.2f %.2f", sensor_buffer->imu_data.gyro.x, sensor_buffer->imu_data.gyro.x, sensor_buffer->imu_data.gyro.z);
+}
+
 
 
 static void logger_func(sensors_shared_buf *shared_buf)
@@ -47,50 +58,31 @@ static void logger_func(sensors_shared_buf *shared_buf)
 	struct fs_file_t file;
 	fs_file_t_init(&file);
 
-	char filename[32];
-	snprintf(filename, sizeof(filename), "/lfs/sensor%d.log", file_index);
-
-	int ret = fs_open(&file, filename, FS_O_CREATE | FS_O_WRITE | FS_O_APPEND);
+	int ret = fs_open(&file, "/lfs/sensor.log", FS_O_CREATE | FS_O_WRITE | FS_O_APPEND);
 	if (ret < 0) {
-		LOG_ERR("Failed to open file %s: %d", filename, ret);
+		LOG_ERR("Failed to open file /lfs/sensor.log: %d", ret);
 		return;
-	}
-    
-	struct fs_dirent entry;
-	ret = fs_stat(filename, &entry);
-	
-	if (ret == 0) {
-		current_file_size = entry.size;
-	}else {
-		current_file_size = 0;
-	}
-	
-	if (current_file_size >= FILE_SIZE) {
-		fs_close(&file);
-
-		file_index = (file_index + 1) % MAX_FILES;
-		snprintf(filename, sizeof(filename), "/lfs/sensor%d.log", file_index);
-		LOG_INF("new file: %s", filename);
-
-		fs_file_t_init(&file);
-		ret = fs_open(&file, filename, FS_O_CREATE | FS_O_WRITE);
-		
-		if (ret < 0) {
-			LOG_ERR("Failed to open new log file %s: %d", filename, ret);
-			return;
-		}
-		current_file_size = 0;
 	}
 	
 	ret = fs_write(&file, shared_buf, sizeof(sensors_shared_buf));
 	if (ret < 0) {
-		LOG_ERR("Failed to write file %s: %d", filename, ret);
-	} else{
-		current_file_size += ret;
-		fs_write(&file, "\n", 1);
-		current_file_size += 1;
+		LOG_ERR("Failed to write file /lfs/sensor.log: %d", ret);
+		// need to close file and return
+	
+		fs_close(&file);
+		return;
 	}
-	LOG_INF("Snsor data: Hum %f", shared_buf->hts_data.humidity);
+
+	off_t current_fp = fs_tell(&file);
+	sensors_shared_buf temp_buf;
+	
+	fs_seek(&file, 0, FS_SEEK_SET);
+
+	for (size_t fptr = 0; fptr < (current_fp / sizeof(sensors_shared_buf)); fptr++ ) {
+		fs_read(&file, &temp_buf, sizeof(sensors_shared_buf));
+		// print sensor data
+		print_sensor_data(&temp_buf);
+	}
 	fs_close(&file);
 }
 
@@ -108,7 +100,7 @@ void logger_thread(void *, void *, void *)
 	}
 }
 
-K_THREAD_DEFINE(logger_tid, LOGGER_THREAD_STACK_SIZE, logger_thread, NULL, NULL, NULL, SENSORS_THREADS_PRIORITY, 0, 0);
+K_THREAD_DEFINE(logger_tid, LOGGER_THREAD_STACK_SIZE, logger_thread, NULL, NULL, NULL, SENSORS_THREADS_PRIORITY, 0, 1000);
 
 
 /* *
@@ -177,8 +169,8 @@ int logger_init(void)
 	    LOG_INF("%s is mounted: %d", lfs_mount_pt.mnt_point, rc);
 
 	    /* Create all 4 threads */
-	    hts_init();
-	    lps_init();
+	    // hts_init();
+	    // lps_init();
 	    imu_sensor_init();
 
 	    return 0;
