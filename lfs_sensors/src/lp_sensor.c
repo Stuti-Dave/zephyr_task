@@ -105,7 +105,7 @@ void pressure_thread(void *, void *, void *)
 
 	while (1) {
 		if(pressure_sensor_process(&data_struct) == 0) {
-			LOG_INF("pressure: %f", data_struct.pressure);
+			//LOG_INF("pressure: %f", data_struct.pressure);
 			k_msgq_put(&lp_sensor_msgq, &data_struct, K_MSEC(1000));
 		}
 		k_sleep(K_MSEC(1000));

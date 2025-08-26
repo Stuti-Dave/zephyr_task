@@ -48,9 +48,8 @@ static void print_sensor_data(sensors_shared_buf *sensor_buffer)
 	LOG_INF("Temperature: %.2f", sensor_buffer->hts_data.temperature);
 	LOG_INF("Pressure: %.2f", sensor_buffer->lps_data.pressure);
 	LOG_INF("Accel: %.2f %.2f %.2f", sensor_buffer->imu_data.accel.x, sensor_buffer->imu_data.accel.y, sensor_buffer->imu_data.accel.z);
-	LOG_INF("Gyro: %.2f %.2f %.2f", sensor_buffer->imu_data.gyro.x, sensor_buffer->imu_data.gyro.x, sensor_buffer->imu_data.gyro.z);
+	LOG_INF("Gyro: %.2f %.2f %.2f", sensor_buffer->imu_data.gyro.x, sensor_buffer->imu_data.gyro.y, sensor_buffer->imu_data.gyro.z);
 }
-
 
 
 static void logger_func(sensors_shared_buf *shared_buf)
@@ -58,31 +57,51 @@ static void logger_func(sensors_shared_buf *shared_buf)
 	struct fs_file_t file;
 	fs_file_t_init(&file);
 
+	off_t current_fp = fs_tell(&file);
+
 	int ret = fs_open(&file, "/lfs/sensor.log", FS_O_CREATE | FS_O_WRITE | FS_O_APPEND);
 	if (ret < 0) {
-		LOG_ERR("Failed to open file /lfs/sensor.log: %d", ret);
+		LOG_ERR("Failed to open file /lfs/sensors.log: %d", ret);
 		return;
 	}
-	
-	ret = fs_write(&file, shared_buf, sizeof(sensors_shared_buf));
-	if (ret < 0) {
-		LOG_ERR("Failed to write file /lfs/sensor.log: %d", ret);
-		// need to close file and return
-	
+	if (current_fp >= FILE_SIZE) {
 		fs_close(&file);
-		return;
-	}
+		char filename[32];
+		uint8_t file_num = 1;
 
-	off_t current_fp = fs_tell(&file);
-	sensors_shared_buf temp_buf;
-	
+		snprintf(filename, sizeof(filename), "/lfs/sensor%c.log", file_num);
+		struct fs_file_t file;
+		fs_file_t_init(&file);
+
+		ret = fs_open(&file, filename, FS_O_CREATE | FS_O_WRITE | FS_O_APPEND);
+		if (ret < 0) {
+			LOG_ERR("Failed to open file /lfs/sensors.log: %d", ret);
+			return;
+		}
+		ret = fs_write(&file, shared_buf, sizeof(sensors_shared_buf));
+	} else {
+		ret = fs_write(&file, shared_buf, sizeof(sensors_shared_buf));
+                if (ret != sizeof(sensors_shared_buf)) {
+                        LOG_ERR("Failed to write file /lfs/sensors.log: %d", ret);
+                        // need to close file and return
+
+                        fs_close(&file);
+                        return;
+                }
+	}
+	current_fp = fs_tell(&file);
+	sensors_shared_buf temp_buf = {0};
 	fs_seek(&file, 0, FS_SEEK_SET);
 
 	for (size_t fptr = 0; fptr < (current_fp / sizeof(sensors_shared_buf)); fptr++ ) {
-		fs_read(&file, &temp_buf, sizeof(sensors_shared_buf));
+		if ( fs_read(&file, &temp_buf, sizeof(sensors_shared_buf)) != sizeof(sensors_shared_buf)) {
+			LOG_ERR("Incorrect read");
+		}
 		// print sensor data
 		print_sensor_data(&temp_buf);
 	}
+
+
 	fs_close(&file);
 }
 
@@ -168,7 +187,6 @@ int logger_init(void)
 	    }
 	    LOG_INF("%s is mounted: %d", lfs_mount_pt.mnt_point, rc);
 
-	    /* Create all 4 threads */
 	    // hts_init();
 	    // lps_init();
 	    imu_sensor_init();
