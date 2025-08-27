@@ -39,7 +39,7 @@ static const struct device *const pressure_dev = DEVICE_DT_GET(PRESSURE_NODE);
 // Private Variables
 //==============================================================================
 
-LOG_MODULE_REGISTER(pressure);
+LOG_MODULE_REGISTER(pressure, LOG_LEVEL_DBG);
 
 //==============================================================================
 // Private Function Prototypes
@@ -105,9 +105,9 @@ void pressure_thread(void *, void *, void *)
 
 	while (1) {
 		if(pressure_sensor_process(&data_struct) == 0) {
-			//LOG_INF("pressure: %f", data_struct.pressure);
 			k_msgq_put(&lp_sensor_msgq, &data_struct, K_MSEC(1000));
 		}
-		k_sleep(K_MSEC(1000));
+		LOG_DBG("Pressure: %f", data_struct.pressure);
+		k_sleep(K_MSEC(5000));
 	}
 }

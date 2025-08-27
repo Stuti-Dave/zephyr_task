@@ -38,47 +38,49 @@ extern struct k_msgq imu_sensor_msgq;
 #define FILE_SIZE			1024
 #define MAX_FILES			10
 
-static int file_index = 0;
 
-static void print_sensor_data(sensors_shared_buf *sensor_buffer)
+static void print_sensor_data(size_t *fptr, sensors_shared_buf *sensor_buffer)
 {
-	LOG_INF("Sensor data:");
+	LOG_INF("Sensor data is ready shown ahead:");
 	// print all sensor data
-	LOG_INF("Humidity: %.2f", sensor_buffer->hts_data.humidity);
-	LOG_INF("Temperature: %.2f", sensor_buffer->hts_data.temperature);
-	LOG_INF("Pressure: %.2f", sensor_buffer->lps_data.pressure);
-	LOG_INF("Accel: %.2f %.2f %.2f", sensor_buffer->imu_data.accel.x, sensor_buffer->imu_data.accel.y, sensor_buffer->imu_data.accel.z);
-	LOG_INF("Gyro: %.2f %.2f %.2f", sensor_buffer->imu_data.gyro.x, sensor_buffer->imu_data.gyro.y, sensor_buffer->imu_data.gyro.z);
+	LOG_INF("|Sample%d |	Humidity: %.2f	|	Temperature: %.2f |	Pressure: %.2f	|	Accel: [x:%.2f, y:%.2f, z:%.2f]	|	Gyro: [x:%.2f, y:%.2f, z:%.2f] |", 
+			*fptr, sensor_buffer->hts_data.humidity, sensor_buffer->hts_data.temperature, sensor_buffer->lps_data.pressure,
+			sensor_buffer->imu_data.accel.x, sensor_buffer->imu_data.accel.y, sensor_buffer->imu_data.accel.z, 
+			sensor_buffer->imu_data.gyro.x, sensor_buffer->imu_data.gyro.y, sensor_buffer->imu_data.gyro.z);
 }
-
 
 static void logger_func(sensors_shared_buf *shared_buf)
 {
 	struct fs_file_t file;
 	fs_file_t_init(&file);
 
-	off_t current_fp = fs_tell(&file);
-
-	int ret = fs_open(&file, "/lfs/sensor.log", FS_O_CREATE | FS_O_WRITE | FS_O_APPEND);
+	char filename[32];
+	uint8_t file_num = 1;
+	snprintf(filename, sizeof(filename), "/lfs/sensor%d.log", file_num);
+	
+	int ret = fs_open(&file, filename, FS_O_CREATE | FS_O_WRITE | FS_O_APPEND);
 	if (ret < 0) {
-		LOG_ERR("Failed to open file /lfs/sensors.log: %d", ret);
+		LOG_ERR("Failed to open file /lfs/sensor%d.log: %d", file_num,ret);
 		return;
 	}
-	if (current_fp >= FILE_SIZE) {
-		fs_close(&file);
-		char filename[32];
-		uint8_t file_num = 1;
 
-		snprintf(filename, sizeof(filename), "/lfs/sensor%c.log", file_num);
-		struct fs_file_t file;
+	struct fs_dirent file_entry;
+	fs_stat(filename, &file_entry);
+	if (file_entry.size >= FILE_SIZE) {
+		fs_close(&file);
+		
+		file_num++;
+		
+		snprintf(filename, sizeof(filename), "/lfs/sensor%d.log", file_num);
 		fs_file_t_init(&file);
 
 		ret = fs_open(&file, filename, FS_O_CREATE | FS_O_WRITE | FS_O_APPEND);
 		if (ret < 0) {
-			LOG_ERR("Failed to open file /lfs/sensors.log: %d", ret);
+			LOG_ERR("Failed to open file /lfs/sensor%d.log: %d", file_num,ret);
 			return;
 		}
 		ret = fs_write(&file, shared_buf, sizeof(sensors_shared_buf));
+		file_num++;
 	} else {
 		ret = fs_write(&file, shared_buf, sizeof(sensors_shared_buf));
                 if (ret != sizeof(sensors_shared_buf)) {
@@ -89,19 +91,22 @@ static void logger_func(sensors_shared_buf *shared_buf)
                         return;
                 }
 	}
+
+	off_t current_fp = fs_tell(&file);
 	current_fp = fs_tell(&file);
-	sensors_shared_buf temp_buf = {0};
 	fs_seek(&file, 0, FS_SEEK_SET);
+	sensors_shared_buf temp_buf = {0};
 
 	for (size_t fptr = 0; fptr < (current_fp / sizeof(sensors_shared_buf)); fptr++ ) {
 		if ( fs_read(&file, &temp_buf, sizeof(sensors_shared_buf)) != sizeof(sensors_shared_buf)) {
 			LOG_ERR("Incorrect read");
+			fs_close(&file);
+
+			return;
 		}
 		// print sensor data
-		print_sensor_data(&temp_buf);
+		print_sensor_data(&fptr, &temp_buf);
 	}
-
-
 	fs_close(&file);
 }
 
@@ -110,9 +115,9 @@ void logger_thread(void *, void *, void *)
 	sensors_shared_buf shared_buf;
 	LOG_INF("Logger Thread started");
 	while (1) {
-		k_msgq_get(&ht_sensor_msgq, &shared_buf.hts_data, K_MSEC(1000));
-		k_msgq_get(&lp_sensor_msgq, &shared_buf.lps_data, K_MSEC(1000));
-		k_msgq_get(&imu_sensor_msgq, &shared_buf.imu_data, K_MSEC(1000));
+		k_msgq_get(&ht_sensor_msgq, &shared_buf.hts_data, K_SECONDS(10));
+		k_msgq_get(&lp_sensor_msgq, &shared_buf.lps_data, K_SECONDS(10));
+		k_msgq_get(&imu_sensor_msgq, &shared_buf.imu_data, K_SECONDS(10));
 			
 		logger_func(&shared_buf);
 		k_sleep(K_SECONDS(60));
@@ -146,8 +151,7 @@ static int littlefs_flash_erase(unsigned int id)
                 return rc;
         }
 
-        LOG_INF("Area %u at 0x%x on %s for %u bytes\n",
-                   id, (unsigned int)pfa->fa_off, pfa->fa_dev->name,(unsigned int)pfa->fa_size);
+        LOG_INF("Area %u at 0x%x on %s for %u bytes\n", id, (unsigned int)pfa->fa_off, pfa->fa_dev->name,(unsigned int)pfa->fa_size);
 
         /* Optional wipe flash contents */
         rc = flash_area_flatten(pfa, 0, pfa->fa_size);
@@ -161,35 +165,35 @@ static int littlefs_mount(struct fs_mount_t *mp)
 {
         int rc;
 
-        rc = littlefs_flash_erase((uintptr_t)mp->storage_dev);
-        if (rc < 0) {
-                return rc;
-        }
-
         /* Do not mount if auto-mount has been enabled */
         rc = fs_mount(mp);
         if (rc < 0) {
-                LOG_ERR("FAIL: mount id %" PRIuPTR " at %s: %d\n",
-                       (uintptr_t)mp->storage_dev, mp->mnt_point, rc);
-                return rc;
-        }
-        LOG_INF("%s is mounted: %d\n", mp->mnt_point, rc);
+		rc = littlefs_flash_erase((uintptr_t)mp->storage_dev);
+		if (rc < 0) {
+			LOG_ERR("Flash erase failed.");
+			return rc;
+		}
+		rc = fs_mount(mp);
+                if (rc < 0) {
+			LOG_ERR("FAIL: mount id %" PRIuPTR " at %s: %d\n",(uintptr_t)mp->storage_dev, mp->mnt_point, rc);
+			return rc;
+		}
+		LOG_INF("%s is mounted: %d\n", mp->mnt_point, rc);
+        } else {
+		LOG_INF("%s is mounted: %d\n", mp->mnt_point, rc);
+	}
 	return 0;
 }
 
 int logger_init(void)
 {
 	int rc;
-	    rc = fs_mount(&lfs_mount_pt);
+	    rc = littlefs_mount(&lfs_mount_pt);
 	    if (rc < 0) {
 		    LOG_ERR("FAIL: mount id %" PRIuPTR " at %s: %d",(uintptr_t)lfs_mount_pt.storage_dev, lfs_mount_pt.mnt_point, rc);
 		    return rc;
 	    }
 	    LOG_INF("%s is mounted: %d", lfs_mount_pt.mnt_point, rc);
-
-	    // hts_init();
-	    // lps_init();
-	    imu_sensor_init();
 
 	    return 0;
 }

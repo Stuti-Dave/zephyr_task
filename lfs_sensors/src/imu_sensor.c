@@ -38,7 +38,7 @@ static const struct device *const imu_dev = DEVICE_DT_GET(IMU_NODE);
 // Private Variables
 //==============================================================================
 
-LOG_MODULE_REGISTER(imu);
+LOG_MODULE_REGISTER(imu, LOG_LEVEL_DBG);
 
 #define MSG_SIZE	sizeof(imu_sensor_data)
 #define MAX_MSGS	10
@@ -125,38 +125,34 @@ void imu_thread(void *, void *, void *)
 	LOG_INF("IMU sensor thread started");
 	imu_sensor_data sensor_data;
 
-	while(1) {
-		if(imu_sensor_process(&sensor_data) == 0) {
-			k_msgq_put(&imu_sensor_msgq, &sensor_data, K_MSEC(1000));
-		}
-		k_sleep(K_MSEC(1000));
-	}
-}
-
-
-int imu_sensor_init(void)
-{
 	if (!device_is_ready(imu_dev)) {
-		LOG_ERR("sensor: device not ready.\n");
-		return -1;
-	}
-	
-	struct sensor_value odr_attr;
+                LOG_ERR("sensor: device not ready.\n");
+                return;
+        }
+
+        struct sensor_value odr_attr;
         /* set accel/gyro sampling frequency to 104 Hz */
         odr_attr.val1 = 104;
         odr_attr.val2 = 0;
 
         if (sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &odr_attr) < 0) {
                 LOG_ERR("Cannot set sampling frequency for accelerometer.\n");
-                return -1;
+                return;
         }
 
         if (sensor_attr_set(imu_dev, SENSOR_CHAN_GYRO_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &odr_attr) < 0) {
                 LOG_ERR("Cannot set sampling frequency for gyro.\n");
-                return -1;
+                return;
         }
-	LOG_INF("IMU sensor Initialized.");
-	
-	return 0;
-}
+        LOG_INF("IMU sensor Initialized.");
 
+	while(1) {
+		if(imu_sensor_process(&sensor_data) == 0) {
+			k_msgq_put(&imu_sensor_msgq, &sensor_data, K_MSEC(1000));
+		}
+		LOG_DBG("Accel: {x:%.2f y:%.2f z:%.2f], Gyro: [x:%.2f y:%.2f z:%.2f]", 
+			sensor_data.accel.x, sensor_data.accel.y, sensor_data.accel.z, 
+			sensor_data.gyro.x, sensor_data.gyro.y, sensor_data.gyro.z);
+		k_sleep(K_MSEC(5000));
+	}
+}

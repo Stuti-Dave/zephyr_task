@@ -37,7 +37,7 @@ static const struct device *const hts_dev = DEVICE_DT_GET(HUM_TEMP_NODE);
 // Private Variables
 //==============================================================================
 
-LOG_MODULE_REGISTER(hum_temp);
+LOG_MODULE_REGISTER(hum_temp, LOG_LEVEL_DBG);
 
 //==============================================================================
 // Private Function Prototypes
@@ -116,7 +116,8 @@ void hum_temp_thread(void *, void *, void *)
 		if (hum_temp_process(&data_struct) == 0){
 			k_msgq_put(&ht_sensor_msgq, &data_struct, K_MSEC(1000));
 		}
-		k_sleep(K_MSEC(1000));
+		LOG_DBG("Humidity: %.2f, Temperature: %.2f", data_struct.humidity, data_struct.temperature);
+		k_sleep(K_MSEC(5000));
 	}
 
 }
