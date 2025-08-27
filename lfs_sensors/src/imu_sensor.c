@@ -24,7 +24,7 @@
 #include <errno.h>
 
 //==============================================================================
-// Device Tree Definitions
+// Device Tree Bindings
 //==============================================================================
 
 #if DT_NODE_EXISTS(DT_ALIAS(imu_sensor))
@@ -35,28 +35,38 @@ static const struct device *const imu_dev = DEVICE_DT_GET(IMU_NODE);
 #endif
 
 //==============================================================================
-// Private Variables
+// Logging Module Register
 //==============================================================================
 
 LOG_MODULE_REGISTER(imu, LOG_LEVEL_DBG);
 
-#define MSG_SIZE	sizeof(imu_sensor_data)
-#define MAX_MSGS	10
-#define MSG_ALIGN	32
-#define SENSOR_PRIORITY	5
-#define IMU_THREAD_STACK_SIZE	1024
+//==============================================================================
+// Configuration Constants
+//==============================================================================
+
+#define MAX_MSGS		10	// Maximum number of sensor samples in queue
+#define MSGQ_ALIGN		32	// Align message queue entries
+#define SENSOR_PRIORITY		5	// Thread priority for sensor task
+#define IMU_THREAD_STACK_SIZE	1024	// Stack size for sensor thread
+
+//==============================================================================
+// Message Queue
+//==============================================================================
+
+// Queue for transferring Acelerometer/Gyroscope readings between threads
 
 struct k_msgq imu_sensor_msgq;
 K_MSGQ_DEFINE(imu_sensor_msgq, MSG_SIZE, MAX_MSGS, MSG_ALIGN);
+
 //==============================================================================
-// Private Function Prototypes
+// Function Prototypes
 //==============================================================================
 
 int imu_sensor_process(imu_sensor_data *sensor_data);
 void imu_thread(void *, void *, void *);
 
 //==============================================================================
-// Private Function Implementation
+// Function Definition
 //==============================================================================
 
 /**
@@ -66,11 +76,10 @@ void imu_thread(void *, void *, void *);
  * fetches the latest sample, and extracts both acceleration and gyroscope
  * values across all three axes (X, Y, Z).
  *
- * @param[out] accel Pointer to a @ref three_d struct where accelerometer data will be stored.
- * @param[out] gyro  Pointer to a @ref three_d struct where gyroscope data will be stored.
+ * Input:  data_struct Pointer to a imu_data_t struct where accelerometer and gyroscope data will be stored.
  *
- * @retval 0  Success, values stored in @p accel and @p gyro.
- * @retval -1 Failure, check logs for details.
+ * Returns: 0  Success, values stored in accel and gyro elements.
+ * 	   -1  Failure, error logged.
  */
 
 int imu_sensor_process(imu_sensor_data *sensor_data)
@@ -94,18 +103,18 @@ int imu_sensor_process(imu_sensor_data *sensor_data)
 	struct sensor_value accel_x, accel_y, accel_z;
 	struct sensor_value gyro_x, gyro_y, gyro_z;
 
-	/* lsm6dsl accel */
+	/* Get sensor channel for lsm6dsl accel */
 	sensor_channel_get(imu_dev, SENSOR_CHAN_ACCEL_X, &accel_x);
 	sensor_channel_get(imu_dev, SENSOR_CHAN_ACCEL_Y, &accel_y);
 	sensor_channel_get(imu_dev, SENSOR_CHAN_ACCEL_Z, &accel_z);
 
 
-	/* lsm6dsl gyro */
+	/* Get sensor channel for lsm6dsl gyro */
 	sensor_channel_get(imu_dev, SENSOR_CHAN_GYRO_X, &gyro_x);
 	sensor_channel_get(imu_dev, SENSOR_CHAN_GYRO_Y, &gyro_y);
 	sensor_channel_get(imu_dev, SENSOR_CHAN_GYRO_Z, &gyro_z);
 
-	/* Filling data to sensor structure*/
+	/* Store accel and gyro readings to the data struct */
 	sensor_data->accel.x = sensor_value_to_double(&accel_x);
 	sensor_data->accel.y = sensor_value_to_double(&accel_y);
 	sensor_data->accel.z = sensor_value_to_double(&accel_z);
@@ -118,7 +127,31 @@ int imu_sensor_process(imu_sensor_data *sensor_data)
 }
 
 
-K_THREAD_DEFINE(imu_tid, IMU_THREAD_STACK_SIZE, imu_thread, NULL, NULL, NULL, SENSOR_PRIORITY, 0, 0);
+//==============================================================================
+// Thread Definition
+//==============================================================================
+
+/*
+ * Definition of Accelerometer and Gyroscope thread
+ */
+
+K_THREAD_DEFINE(imu_tid, IMU_THREAD_STACK_SIZE, imu_thread, 
+		NULL, NULL, NULL, 
+		SENSOR_PRIORITY, 0, 0);
+
+//==============================================================================
+// Thread Implementation
+//==============================================================================
+
+/**
+ * @brief Thread function for IMU sampling.
+ *
+ * Workflow:
+ *  1. Ensure the IMU is ready.
+ *  2. Configure sensor attributes (sampling frequency).
+ *  3. Periodically fetch accel + gyro readings.
+ *  4. Publish results to the message queue.
+ */
 
 void imu_thread(void *, void *, void *)
 {

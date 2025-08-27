@@ -14,40 +14,89 @@
 // Includes
 //==============================================================================
 
-#include <stdio.h>
-
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/fs/fs.h>
 #include <zephyr/fs/littlefs.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/storage/flash_map.h>
-
 #include "main.h"
 #include <errno.h>
+#include <stdio.h>
+
+//==============================================================================
+// Logging Module Register
+//==============================================================================
 
 LOG_MODULE_REGISTER(logger);
 
+//==============================================================================
+// External Sensor Queues
+//==============================================================================
+//
 extern struct k_msgq ht_sensor_msgq;
 extern struct k_msgq lp_sensor_msgq;
 extern struct k_msgq imu_sensor_msgq;
 
+//==============================================================================
+// Configuration Constants
+//==============================================================================
+
+/*
+ * Constants for sensor data struct and thread
+ */
 #define SENSORS_BUF_SIZE		sizeof(sensors_shared_buf)
 #define SENSORS_THREADS_PRIORITY	5
-#define LOGGER_THREAD_STACK_SIZE	2*1024
-#define FILE_SIZE			1024
-#define MAX_FILES			10
+#define LOGGER_THREAD_STACK_SIZE	(2 * 1024)
 
+/*
+ * Constants for File
+ */
+#define FILE_SIZE			1024		// Max file size in bytes
+#define MAX_FILES			10		// Maximum number of log files
 
+//==============================================================================
+// Function Prototypes
+//==============================================================================
+
+static int logger_func(sensors_shared_buf* shared_buf);
+static void logger_thread(void *, void *, void *);
+
+//==============================================================================
+// Internal Helper Functions
+//==============================================================================
+
+/**
+ * @brief Print a single sensor data record.
+ *
+ * Logs formatted output of all sensor values for human readability.
+ *
+ * Input:  fptr			Index of the sample in the file.
+ * 	   sensor_buffer	Pointer to the sensor buffer to print.
+ */
 static void print_sensor_data(size_t *fptr, sensors_shared_buf *sensor_buffer)
 {
-	LOG_INF("Sensor data is ready shown ahead:");
-	// print all sensor data
+	// Prints sensor data on console
 	LOG_INF("|Sample%d |	Humidity: %.2f	|	Temperature: %.2f |	Pressure: %.2f	|	Accel: [x:%.2f, y:%.2f, z:%.2f]	|	Gyro: [x:%.2f, y:%.2f, z:%.2f] |", 
 			*fptr, sensor_buffer->hts_data.humidity, sensor_buffer->hts_data.temperature, sensor_buffer->lps_data.pressure,
 			sensor_buffer->imu_data.accel.x, sensor_buffer->imu_data.accel.y, sensor_buffer->imu_data.accel.z, 
 			sensor_buffer->imu_data.gyro.x, sensor_buffer->imu_data.gyro.y, sensor_buffer->imu_data.gyro.z);
 }
+
+//==============================================================================
+// Function Definitions
+//==============================================================================
+
+/**
+ * @brief Append sensor data to a log file.
+ *
+ * Opens a LittleFS file, appends new sensor data, and if the file size exceeds
+ * a limit, rotates to a new file. Afterwards, it re-reads the file contents
+ * and prints them for verification.
+ *
+ * Input: shared_buf Pointer to the data structure containing all sensor data.
+ */
+
 
 static void logger_func(sensors_shared_buf *shared_buf)
 {
@@ -110,6 +159,29 @@ static void logger_func(sensors_shared_buf *shared_buf)
 	fs_close(&file);
 }
 
+//==============================================================================
+// Thread Definition
+//==============================================================================
+
+/*
+ * Definition of Logger thread
+ */
+
+K_THREAD_DEFINE(logger_tid, LOGGER_THREAD_STACK_SIZE, logger_thread, 
+		NULL, NULL, NULL, 
+		SENSORS_THREADS_PRIORITY, 0, 1000);
+
+//==============================================================================
+// Thread Function
+//==============================================================================
+
+/**
+ * @brief Logger thread.
+ *
+ * Collects data from all sensor queues, aggregates into a single buffer,
+ * and writes it into LittleFS periodically.
+ */
+
 void logger_thread(void *, void *, void *)
 {
 	sensors_shared_buf shared_buf;
@@ -124,14 +196,13 @@ void logger_thread(void *, void *, void *)
 	}
 }
 
-K_THREAD_DEFINE(logger_tid, LOGGER_THREAD_STACK_SIZE, logger_thread, NULL, NULL, NULL, SENSORS_THREADS_PRIORITY, 0, 1000);
+//==============================================================================
+// LittleFS Mount & Flash Management
+//==============================================================================
 
-
-/* *
- * Mount Little FS 
- * */
-
+/* Default LittleFS Configuration */
 FS_LITTLEFS_DECLARE_DEFAULT_CONFIG(lfs1);
+
 /* LittleFS mount point */
 static struct fs_mount_t lfs_mount_pt = {
 	.type = FS_LITTLEFS,
@@ -139,6 +210,15 @@ static struct fs_mount_t lfs_mount_pt = {
 	.storage_dev = (void *)FIXED_PARTITION_ID(lfs1_partition),
 	.mnt_point = "/lfs",
 };
+
+/**
+ * @brief Erase flash area used by LittleFS.
+ *
+ * Input: id Partition ID of the flash area to erase.
+ *
+ * Returns: 0  Success
+ * 	   <0  Error code
+ */
 
 static int littlefs_flash_erase(unsigned int id)
 {
@@ -160,6 +240,17 @@ static int littlefs_flash_erase(unsigned int id)
         flash_area_close(pfa);
         return rc;
 }
+
+/**
+ * @brief Mount LittleFS at given mount point.
+ *
+ * Attempts to mount; if it fails, erases flash and retries.
+ *
+ * Input: mp Mount point structure.
+ *
+ * Returns:  0  Success
+ *	    <0  Error code
+ */
 
 static int littlefs_mount(struct fs_mount_t *mp)
 {
@@ -184,6 +275,19 @@ static int littlefs_mount(struct fs_mount_t *mp)
 	}
 	return 0;
 }
+
+//==============================================================================
+// Logger Initialization
+//==============================================================================
+
+/**
+ * @brief Initialize logger module.
+ *
+ * Mounts LittleFS filesystem before starting logging operations.
+ *
+ * Returns: 0  Success
+ * 	   <0  Error code
+ */
 
 int logger_init(void)
 {

@@ -23,7 +23,7 @@
 #include <stdint.h>
 
 //==============================================================================
-// Device Tree Definitions
+// Device Tree Bindings
 //==============================================================================
 
 #if DT_NODE_EXISTS(DT_ALIAS(ht_sensor))
@@ -34,42 +34,50 @@ static const struct device *const hts_dev = DEVICE_DT_GET(HUM_TEMP_NODE);
 #endif
 
 //==============================================================================
-// Private Variables
+// Logging Module Register
 //==============================================================================
 
 LOG_MODULE_REGISTER(hum_temp, LOG_LEVEL_DBG);
 
 //==============================================================================
-// Private Function Prototypes
+// Configuration Constants
 //==============================================================================
 
-int hum_temp_process(hum_temp_data* data_struct);
-void hum_temp_thread(void *, void *, void *);
+#define MAX_MSGS              10     // Maximum number of sensor samples in queue
+#define MSGQ_ALIGN            32     // Align message queue entries
+#define SENSOR_PRIORITY       5      // Thread priority for sensor task
+#define HT_THREAD_STACK_SIZE  512    // Stack size for sensor thread
 
 //==============================================================================
-// Private Function Implementation
+// Message Queue
+//==============================================================================
+
+// Queue for transferring humidity/temperature readings between threads
+struct k_msgq ht_sensor_msgq;
+K_MSGQ_DEFINE(ht_sensor_msgq, sizeof(hum_temp_data), MAX_MSGS, MSGQ_ALIGN);
+
+//==============================================================================
+// Function Prototypes
+//==============================================================================
+
+static int hum_temp_process(hum_temp_data* data_struct);
+static void hum_temp_thread(void *, void *, void *);
+
+//==============================================================================
+// Function Definitions
 //==============================================================================
 
 /**
- * @brief Fetch and process humidity and temperature readings.
+ * @brief Fetch a humidity and temperature sample from the sensor.
  *
- * This function checks whether the sensor device is ready, fetches
- * the latest sample, and extracts both temperature and humidity values.
+ * This function checks readiness, fetches the latest measurement,
+ * and converts it to floating-point values stored in data_struct.
  *
- * @param[out] temp Pointer to a double where the temperature (°C) will be stored.
- * @param[out] hum  Pointer to a double where the relative humidity (%) will be stored.
+ * Input: data_struct Pointer to store the fetched temperature & humidity.
  *
- * @retval 0  Success, values stored in @p temp and @p hum.
- * @retval -1 Failure, check logs for details.
+ * Returns: 0  Success, value stored in data_struct humidity and temperature elements.
+ * 	   -1  Failure, error logged.
  */
-
-#define MAX_MSGS	10
-#define MSGQ_ALIGN	32
-#define SENSOR_PRIORITY	5
-#define HT_THREAD_STACK_SIZE	512
-
-struct k_msgq ht_sensor_msgq;
-K_MSGQ_DEFINE(ht_sensor_msgq, sizeof(hum_temp_data), MAX_MSGS, MSGQ_ALIGN);
 
 int hum_temp_process(hum_temp_data* data_struct){
 	if (sensor_sample_fetch(hts_dev) < 0)
@@ -88,18 +96,39 @@ int hum_temp_process(hum_temp_data* data_struct){
 		return -1;
 	}
 
-	/* store temperature reading*/
+	/* Store temperature and humidity readings to the data struct */
 	data_struct->temperature = sensor_value_to_double(&temp);
-
-	/* store humidity reading*/
 	data_struct->humidity = sensor_value_to_double(&hum);
 
 	return 0;
 }
 
 
-K_THREAD_DEFINE(hum_temp_tid, HT_THREAD_STACK_SIZE, hum_temp_thread, NULL, NULL, NULL, SENSOR_PRIORITY, 0, 0);
-//message queue
+//==============================================================================
+// Thread Definition
+//==============================================================================
+
+/*
+ * Definition of Humidty and Temperature thread
+ */
+
+K_THREAD_DEFINE(hum_temp_tid, HT_THREAD_STACK_SIZE, hum_temp_thread, 
+		NULL, NULL, NULL, 
+		SENSOR_PRIORITY, 0, 0);
+
+//==============================================================================
+// Thread Function
+//==============================================================================
+
+/**
+ * @brief Thread function for humidity-temperature sampling.
+ *
+ * Periodically:
+ *  1. Validates sensor readiness.
+ *  2. Reads humidity and temperature.
+ *  3. Pushes results into the message queue.
+ *  4. Sleeps before the next cycle.
+ */
 
 void hum_temp_thread(void *, void *, void *)
 {

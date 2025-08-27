@@ -25,7 +25,7 @@
 #include <errno.h>
 
 //==============================================================================
-// Device Tree Definitions
+// Device Tree Bindings
 //==============================================================================
 
 #if DT_NODE_EXISTS(DT_ALIAS(pressure_sensor))
@@ -36,20 +36,37 @@ static const struct device *const pressure_dev = DEVICE_DT_GET(PRESSURE_NODE);
 #endif
 
 //==============================================================================
-// Private Variables
+// Logging Module Register
 //==============================================================================
 
 LOG_MODULE_REGISTER(pressure, LOG_LEVEL_DBG);
 
 //==============================================================================
-// Private Function Prototypes
+// Configuration Constants
+//==============================================================================
+
+#define MAX_MSGS			10 	// Maximum number of sensor samples in queue
+#define MSGQ_ALIGN      		32 	// Align message queue entries
+#define SENSOR_PRIORITY			5 	// Thread priority for sensor task
+#define PRESSURE_THREAD_STACK_SIZE	512 	// Stack size for sensor thread
+
+//==============================================================================
+// Message Queue
+//==============================================================================
+
+// Queue for transferring pressure readings between threads
+struct k_msgq lp_sensor_msgq;
+K_MSGQ_DEFINE(lp_sensor_msgq, sizeof(press_data), MAX_MSGS, MSGQ_ALIGN);
+
+//==============================================================================
+// Function Prototypes
 //==============================================================================
 
 int pressure_sensor_process(press_data *data_struct);
 void pressure_thread(void *, void *, void *);
 
 //==============================================================================
-// Private Function Implementation
+// Function Definitions
 //==============================================================================
 
 /**
@@ -58,19 +75,11 @@ void pressure_thread(void *, void *, void *);
  * This function checks whether the pressure sensor device is ready,
  * fetches the latest sample, and extracts the pressure value in kPa.
  *
- * @param[out] press Pointer to a double where the pressure value will be stored.
+ * Input: data_struct Pointer to store the fetched pressure.
  *
- * @retval 0  Success, value stored in @p press.
- * @retval -1 Failure, check logs for details.
+ * Return: 0  Success, value stored in data_struct pressure element.
+ * 	  -1  Failure, error logged.
  */
-
-#define MAX_MSGS	10
-#define MSGQ_ALIGN      32
-#define SENSOR_PRIORITY	5
-#define PRESSURE_THREAD_STACK_SIZE	512
-
-struct k_msgq lp_sensor_msgq;
-K_MSGQ_DEFINE(lp_sensor_msgq, sizeof(press_data), MAX_MSGS, MSGQ_ALIGN);
 
 int pressure_sensor_process(press_data *data_struct)
 {
@@ -90,8 +99,31 @@ int pressure_sensor_process(press_data *data_struct)
 	return 0;
 }
 
+//==============================================================================
+// Thread Definition
+//==============================================================================
 
-K_THREAD_DEFINE(pressure_tid, PRESSURE_THREAD_STACK_SIZE, pressure_thread, NULL, NULL, NULL, SENSOR_PRIORITY, 0, 0);
+/*
+ * Definition of Pressure thread
+ */
+
+K_THREAD_DEFINE(pressure_tid, PRESSURE_THREAD_STACK_SIZE, pressure_thread, 
+		NULL, NULL, NULL, 
+		SENSOR_PRIORITY, 0, 0);
+
+//==============================================================================
+// Thread Implementation
+//==============================================================================
+
+/**
+ * @brief Thread function for pressure sampling.
+ *
+ * Workflow:
+ *  1. Ensure the pressure sensor is ready.
+ *  2. Periodically fetch a sample and process it.
+ *  3. Push the result to the message queue.
+ *  4. Sleep before the next iteration.
+ */
 
 void pressure_thread(void *, void *, void *)
 {
