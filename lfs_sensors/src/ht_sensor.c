@@ -49,6 +49,15 @@ LOG_MODULE_REGISTER(hum_temp, LOG_LEVEL_DBG);
 #define HT_THREAD_STACK_SIZE  512    // Stack size for sensor thread
 
 //==============================================================================
+// Sensor-data structure
+//==============================================================================
+
+typedef struct {
+        double humidity;
+        double temperature;
+} hum_temp_data;
+
+//==============================================================================
 // Message Queue
 //==============================================================================
 

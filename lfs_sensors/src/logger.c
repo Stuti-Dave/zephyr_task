@@ -20,7 +20,6 @@
 #include <zephyr/fs/littlefs.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/storage/flash_map.h>
-#include "main.h"
 #include <errno.h>
 #include <stdio.h>
 
@@ -29,6 +28,38 @@
 //==============================================================================
 
 LOG_MODULE_REGISTER(logger);
+
+//==============================================================================
+// Structure definitons of sensors
+//==============================================================================
+
+/*
+ * Structures of HTS221, LPS22HB and LSM6DSL
+ */
+
+typedef struct {
+        double humidity;
+        double temperature;
+} hum_temp_data;
+
+typedef struct {
+        double pressure;
+} press_data;
+
+typedef struct {
+    double x, y, z;
+} imu_data_t;
+
+typedef struct {
+        imu_data_t accel;
+        imu_data_t gyro;
+} imu_sensor_data;
+
+typedef struct {
+        hum_temp_data hts_data;
+        press_data lps_data;
+        imu_sensor_data imu_data;
+} sensors_shared_buf;
 
 //==============================================================================
 // External Sensor Queues

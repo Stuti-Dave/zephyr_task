@@ -41,6 +41,19 @@ static const struct device *const imu_dev = DEVICE_DT_GET(IMU_NODE);
 LOG_MODULE_REGISTER(imu, LOG_LEVEL_DBG);
 
 //==============================================================================
+// Sensor-data structure
+//==============================================================================
+
+typedef struct {
+    double x, y, z;
+} imu_data_t;
+
+typedef struct {
+        imu_data_t accel;
+        imu_data_t gyro;
+} imu_sensor_data;
+
+//==============================================================================
 // Configuration Constants
 //==============================================================================
 
