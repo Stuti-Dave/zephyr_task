@@ -90,7 +90,7 @@ extern struct k_msgq imu_sensor_msgq;
 // Function Prototypes
 //==============================================================================
 
-static int logger_func(sensors_shared_buf* shared_buf);
+static void logger_func(sensors_shared_buf *shared_buf);
 static void logger_thread(void *, void *, void *);
 
 //==============================================================================

@@ -16,7 +16,6 @@
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
-#include "main.h"
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/logging/log.h>
 #include <errno.h>
@@ -37,7 +36,7 @@ static const struct device *const hts_dev = DEVICE_DT_GET(HUM_TEMP_NODE);
 // Logging Module Register
 //==============================================================================
 
-LOG_MODULE_REGISTER(hum_temp, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(hum_temp, CONFIG_APP_LOG_LEVEL);
 
 //==============================================================================
 // Configuration Constants

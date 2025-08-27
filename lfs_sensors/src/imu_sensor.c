@@ -18,7 +18,6 @@
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
-#include "main.h"
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/logging/log.h>
 #include <errno.h>
@@ -38,7 +37,7 @@ static const struct device *const imu_dev = DEVICE_DT_GET(IMU_NODE);
 // Logging Module Register
 //==============================================================================
 
-LOG_MODULE_REGISTER(imu, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(imu, CONFIG_APP_LOG_LEVEL_DBG);
 
 //==============================================================================
 // Sensor-data structure
@@ -57,10 +56,11 @@ typedef struct {
 // Configuration Constants
 //==============================================================================
 
-#define MAX_MSGS		10	// Maximum number of sensor samples in queue
-#define MSGQ_ALIGN		32	// Align message queue entries
-#define SENSOR_PRIORITY		5	// Thread priority for sensor task
-#define IMU_THREAD_STACK_SIZE	1024	// Stack size for sensor thread
+#define MAX_MSGS		10			// Maximum number of sensor samples in queue
+#define MSG_ALIGN		32			// Align message queue entries
+#define MSG_SIZE		sizeof(imu_sensor_data) // Size of message equals struct size
+#define SENSOR_PRIORITY		5			// Thread priority for sensor task
+#define IMU_THREAD_STACK_SIZE	1024			// Stack size for sensor thread
 
 //==============================================================================
 // Message Queue

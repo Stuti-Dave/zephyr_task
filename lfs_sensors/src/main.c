@@ -16,7 +16,6 @@
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
-#include "main.h"
 #include <zephyr/logging/log.h>
 
 //==============================================================================
