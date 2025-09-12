@@ -64,7 +64,7 @@ typedef struct {
 //==============================================================================
 // External Sensor Queues
 //==============================================================================
-//
+
 extern struct k_msgq ht_sensor_msgq;
 extern struct k_msgq lp_sensor_msgq;
 extern struct k_msgq imu_sensor_msgq;
