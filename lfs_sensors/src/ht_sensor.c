@@ -42,10 +42,10 @@ LOG_MODULE_REGISTER(hum_temp, CONFIG_APP_LOG_LEVEL);
 // Configuration Constants
 //==============================================================================
 
-#define MAX_MSGS              10     // Maximum number of sensor samples in queue
-#define MSGQ_ALIGN            32     // Align message queue entries
-#define SENSOR_PRIORITY       5      // Thread priority for sensor task
-#define HT_THREAD_STACK_SIZE  512    // Stack size for sensor thread
+#define MAX_MSGS              	10     // Maximum number of sensor samples in queue
+#define MSGQ_ALIGN            	32     // Align message queue entries
+#define HT_SENSOR_PRIORITY	5	// Thread priority for sensor task
+#define HT_THREAD_STACK_SIZE  	512    // Stack size for sensor thread
 
 //==============================================================================
 // Sensor-data structure
@@ -122,7 +122,7 @@ int hum_temp_process(hum_temp_data* data_struct){
 
 K_THREAD_DEFINE(hum_temp_tid, HT_THREAD_STACK_SIZE, hum_temp_thread, 
 		NULL, NULL, NULL, 
-		SENSOR_PRIORITY, 0, 0);
+		HT_SENSOR_PRIORITY, 0, 0);
 
 //==============================================================================
 // Thread Function

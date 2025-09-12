@@ -38,7 +38,7 @@ static const struct device *const pressure_dev = DEVICE_DT_GET(PRESSURE_NODE);
 // Logging Module Register
 //==============================================================================
 
-LOG_MODULE_REGISTER(pressure, CONFIG_APP_LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(pressure, CONFIG_APP_LOG_LEVEL);
 
 //==============================================================================
 // Configuration Constants
@@ -46,7 +46,7 @@ LOG_MODULE_REGISTER(pressure, CONFIG_APP_LOG_LEVEL_DBG);
 
 #define MAX_MSGS			10 	// Maximum number of sensor samples in queue
 #define MSGQ_ALIGN      		32 	// Align message queue entries
-#define SENSOR_PRIORITY			5 	// Thread priority for sensor task
+#define PRESSURE_SENSOR_PRIORITY	5 	// Thread priority for sensor task
 #define PRESSURE_THREAD_STACK_SIZE	512 	// Stack size for sensor thread
 
 //==============================================================================
@@ -113,10 +113,10 @@ int pressure_sensor_process(press_data *data_struct)
 /*
  * Definition of Pressure thread
  */
-
 K_THREAD_DEFINE(pressure_tid, PRESSURE_THREAD_STACK_SIZE, pressure_thread, 
 		NULL, NULL, NULL, 
-		SENSOR_PRIORITY, 0, 0);
+		PRESSURE_SENSOR_PRIORITY, 0, 0);
+
 
 //==============================================================================
 // Thread Implementation
@@ -134,19 +134,22 @@ K_THREAD_DEFINE(pressure_tid, PRESSURE_THREAD_STACK_SIZE, pressure_thread,
 
 void pressure_thread(void *, void *, void *)
 {
-	if (!device_is_ready(pressure_dev)) {
+        if (!device_is_ready(pressure_dev)) {
                 LOG_ERR("sensor: %s device not ready.", pressure_dev->name);
                 return;
         }
 
-	LOG_INF("Pressure Thread started");
-	press_data data_struct;
+        press_data data_struct;
+        LOG_INF("LP Thread started");
 
-	while (1) {
-		if(pressure_sensor_process(&data_struct) == 0) {
-			k_msgq_put(&lp_sensor_msgq, &data_struct, K_MSEC(1000));
-		}
-		LOG_DBG("Pressure: %f", data_struct.pressure);
-		k_sleep(K_MSEC(5000));
-	}
+        while (1)
+        {
+                if (pressure_sensor_process(&data_struct) == 0){
+                        k_msgq_put(&lp_sensor_msgq, &data_struct, K_MSEC(1000));
+                }
+                LOG_DBG("Pressure: %.2f", data_struct.pressure);
+                k_sleep(K_MSEC(5000));
+        }
+
 }
+

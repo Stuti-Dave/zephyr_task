@@ -78,7 +78,7 @@ extern struct k_msgq imu_sensor_msgq;
  */
 #define SENSORS_BUF_SIZE		sizeof(sensors_shared_buf)
 #define SENSORS_THREADS_PRIORITY	5
-#define LOGGER_THREAD_STACK_SIZE	(2 * 1024)
+#define LOGGER_THREAD_STACK_SIZE	(2*1024)
 
 /*
  * Constants for File

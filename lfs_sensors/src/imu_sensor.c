@@ -37,7 +37,7 @@ static const struct device *const imu_dev = DEVICE_DT_GET(IMU_NODE);
 // Logging Module Register
 //==============================================================================
 
-LOG_MODULE_REGISTER(imu, CONFIG_APP_LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(imu, CONFIG_APP_LOG_LEVEL);
 
 //==============================================================================
 // Sensor-data structure
@@ -59,7 +59,7 @@ typedef struct {
 #define MAX_MSGS		10			// Maximum number of sensor samples in queue
 #define MSG_ALIGN		32			// Align message queue entries
 #define MSG_SIZE		sizeof(imu_sensor_data) // Size of message equals struct size
-#define SENSOR_PRIORITY		5			// Thread priority for sensor task
+#define IMU_SENSOR_PRIORITY	5			// Thread priority for sensor task
 #define IMU_THREAD_STACK_SIZE	1024			// Stack size for sensor thread
 
 //==============================================================================
@@ -148,9 +148,7 @@ int imu_sensor_process(imu_sensor_data *sensor_data)
  * Definition of Accelerometer and Gyroscope thread
  */
 
-K_THREAD_DEFINE(imu_tid, IMU_THREAD_STACK_SIZE, imu_thread, 
-		NULL, NULL, NULL, 
-		SENSOR_PRIORITY, 0, 0);
+K_THREAD_DEFINE(imu_tid, IMU_THREAD_STACK_SIZE, imu_thread, NULL, NULL, NULL, IMU_SENSOR_PRIORITY, 0, 0);
 
 //==============================================================================
 // Thread Implementation
